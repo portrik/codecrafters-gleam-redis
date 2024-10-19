@@ -1,54 +1,50 @@
+import birl/duration
 import gleam/dict.{type Dict}
-import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option}
-import gleam/otp/actor
+import gleam/order
 
-const timeout: Int = 5000
+import birl.{type Time}
 
-pub type Message {
-  Get(client: Subject(Option(String)), key: String)
-  Set(key: String, value: String)
-
-  Shutdown
+pub type Record {
+  Record(value: String, created_at: Time, expires_at: Option(Time))
 }
 
-fn get_item(store: Dict(String, String), key: String) -> Option(String) {
-  store
-  |> dict.get(key)
-  |> option.from_result
-}
+pub fn get_item(
+  store: Dict(String, Record),
+  key: String,
+) -> #(Dict(String, Record), Option(String)) {
+  let assert option.Some(value) =
+    store
+    |> dict.get(key)
+    |> option.from_result
 
-fn handle_message(
-  message: Message,
-  store: Dict(String, String),
-) -> actor.Next(Message, Dict(String, String)) {
-  case message {
-    Shutdown -> actor.Stop(process.Normal)
-
-    Get(client, key) -> {
-      process.send(client, get_item(store, key))
-
-      actor.continue(store)
-    }
-
-    Set(key, value) -> {
-      actor.continue(dict.insert(store, key, value))
-    }
+  case value.expires_at {
+    option.None -> #(store, option.Some(value.value))
+    option.Some(expires_at) ->
+      case birl.compare(birl.now(), expires_at) {
+        order.Lt -> #(store, option.Some(value.value))
+        _ -> #(dict.delete(store, key), option.None)
+      }
   }
 }
 
-pub fn new() -> Result(Subject(Message), actor.StartError) {
-  actor.start(dict.new(), handle_message)
-}
+pub fn set_item(
+  store: Dict(String, Record),
+  key: String,
+  value: String,
+  expiration: Option(Int),
+) -> Dict(String, Record) {
+  let created_at = birl.now()
 
-pub fn close(store: Subject(Message)) -> Nil {
-  actor.send(store, Shutdown)
-}
+  let expires_at = case expiration {
+    option.None -> option.None
+    option.Some(value) ->
+      value
+      |> duration.milli_seconds
+      |> birl.add(created_at, _)
+      |> option.Some
+  }
 
-pub fn get(store: Subject(Message), key: String) -> Option(String) {
-  actor.call(store, Get(_, key), timeout)
-}
-
-pub fn set(store: Subject(Message), key: String, value: String) -> Nil {
-  actor.send(store, Set(key, value))
+  store
+  |> dict.insert(key, Record(value, created_at, expires_at))
 }

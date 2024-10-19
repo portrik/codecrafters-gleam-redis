@@ -53,6 +53,34 @@ fn parse_resp(message: String) -> Option(List(RESP)) {
   }
 }
 
+fn parse_set_command(
+  key: String,
+  value: String,
+  options: List(RESP),
+) -> command.Command {
+  let expiration =
+    options
+    |> list.fold(option.None, fn(folder, current) {
+      case folder {
+        option.None -> {
+          case current {
+            RESP(_length, "PX") -> option.Some(option.None)
+            _ -> option.None
+          }
+        }
+        option.Some(_) -> {
+          case int.base_parse(current.data, 10) {
+            Error(_) -> option.None
+            Ok(value) -> option.Some(option.Some(value))
+          }
+        }
+      }
+    })
+    |> option.flatten
+
+  command.SET(key, value, expiration)
+}
+
 pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
   let assert option.Some(message) = case message {
     glisten.Packet(content) ->
@@ -68,7 +96,7 @@ pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
     resp_list
     |> list.index_map(fn(value, index) {
       case index {
-        index if index == 0 || index > 1 ->
+        index if index == 0 || index > 2 ->
           RESP(value.length, string.uppercase(value.data))
         _ -> value
       }
@@ -79,8 +107,8 @@ pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
     [RESP(_length, "ECHO"), RESP(_length, data)] ->
       option.Some(command.ECHO(data))
     [RESP(_length, "GET"), RESP(_length, key)] -> option.Some(command.GET(key))
-    [RESP(_length, "SET"), RESP(_length, key), RESP(_length, value)] ->
-      option.Some(command.SET(key, value))
+    [RESP(_length, "SET"), RESP(_length, key), RESP(_length, value), ..options] ->
+      option.Some(parse_set_command(key, value, options))
     _ -> option.None
   }
 }

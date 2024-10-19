@@ -8,13 +8,13 @@ import glisten.{type Connection, type Message}
 
 import messaging/parse
 import messaging/response
-import store/store
+import store/actor as actor_store
 
 pub fn response_handler(
   message: Message(a),
   state: Nil,
   connection: Connection(a),
-  store_actor: Subject(store.Message),
+  store_actor: Subject(actor_store.Message),
 ) -> Next(Message(a), Nil) {
   io.println("Received message!")
 

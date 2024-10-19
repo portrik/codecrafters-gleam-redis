@@ -3,10 +3,10 @@ import gleam/option.{None}
 import glisten.{type Connection, type Message}
 import handler/handler
 
-import store/store
+import store/actor
 
 pub fn main() {
-  let assert Ok(store_actor) = store.new()
+  let assert Ok(store_actor) = actor.new()
 
   let assert Ok(_) =
     glisten.handler(
@@ -18,5 +18,5 @@ pub fn main() {
     |> glisten.serve(6379)
 
   process.sleep_forever()
-  store.close(store_actor)
+  actor.close(store_actor)
 }
