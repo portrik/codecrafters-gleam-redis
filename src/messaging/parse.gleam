@@ -3,6 +3,7 @@ import gleam/int
 import gleam/list
 import gleam/option.{type Option}
 import gleam/regex
+import gleam/string
 
 import glisten.{type Message}
 
@@ -62,6 +63,16 @@ pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
   }
 
   let assert option.Some(resp_list) = parse_resp(message)
+  // Commands should be case insensitive
+  let resp_list =
+    resp_list
+    |> list.index_map(fn(value, index) {
+      case index {
+        index if index == 0 || index > 1 ->
+          RESP(value.length, string.uppercase(value.data))
+        _ -> value
+      }
+    })
 
   case resp_list {
     [RESP(_length, "PING")] -> option.Some(command.PING)
