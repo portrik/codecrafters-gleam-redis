@@ -1,16 +1,12 @@
+import gleam/bit_array
 import gleam/int
 import gleam/list
 import gleam/option.{type Option}
 import gleam/regex
 
-import gleam/bit_array
+import glisten.{type Message}
 
-import glisten.{type Message, Packet}
-
-pub type Command {
-  PING
-  ECHO(content: String)
-}
+import messaging/command.{type Command}
 
 type RESP {
   RESP(length: Int, data: String)
@@ -58,7 +54,7 @@ fn parse_resp(message: String) -> Option(List(RESP)) {
 
 pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
   let assert option.Some(message) = case message {
-    Packet(content) ->
+    glisten.Packet(content) ->
       content
       |> bit_array.to_string
       |> option.from_result
@@ -68,8 +64,12 @@ pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
   let assert option.Some(resp_list) = parse_resp(message)
 
   case resp_list {
-    [RESP(_length, "PING")] -> option.Some(PING)
-    [RESP(_length, "ECHO"), RESP(_length, data)] -> option.Some(ECHO(data))
+    [RESP(_length, "PING")] -> option.Some(command.PING)
+    [RESP(_length, "ECHO"), RESP(_length, data)] ->
+      option.Some(command.ECHO(data))
+    [RESP(_length, "GET"), RESP(_length, key)] -> option.Some(command.GET(key))
+    [RESP(_length, "SET"), RESP(_length, key), RESP(_length, value)] ->
+      option.Some(command.SET(key, value))
     _ -> option.None
   }
 }
