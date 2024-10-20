@@ -7,6 +7,7 @@ import gleam/string
 
 import glisten.{type Message}
 
+import configuration/configuration
 import messaging/command.{type Command}
 
 type RESP {
@@ -78,7 +79,16 @@ fn parse_set_command(
     })
     |> option.flatten
 
-  command.SET(key, value, expiration)
+  command.Set(key, value, expiration)
+}
+
+fn parse_config_get_command(key: String) -> Option(Command) {
+  case string.lowercase(key) {
+    "dir" -> option.Some(command.Config(command.ConfigRead, configuration.Dir))
+    "dbfilename" ->
+      option.Some(command.Config(command.ConfigRead, configuration.DBFilename))
+    _ -> option.None
+  }
 }
 
 pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
@@ -103,12 +113,14 @@ pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
     })
 
   case resp_list {
-    [RESP(_length, "PING")] -> option.Some(command.PING)
+    [RESP(_length, "PING")] -> option.Some(command.Ping)
     [RESP(_length, "ECHO"), RESP(_length, data)] ->
-      option.Some(command.ECHO(data))
-    [RESP(_length, "GET"), RESP(_length, key)] -> option.Some(command.GET(key))
+      option.Some(command.Echo(data))
+    [RESP(_length, "GET"), RESP(_length, key)] -> option.Some(command.Get(key))
     [RESP(_length, "SET"), RESP(_length, key), RESP(_length, value), ..options] ->
       option.Some(parse_set_command(key, value, options))
+    [RESP(_length, "CONFIG"), RESP(_length, "GET"), RESP(_length, key)] ->
+      parse_config_get_command(key)
     _ -> option.None
   }
 }

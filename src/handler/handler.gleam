@@ -6,15 +6,17 @@ import gleam/otp/actor.{type Next}
 
 import glisten.{type Connection, type Message}
 
+import configuration/configuration.{type Message as ConfigurationMessage}
 import messaging/parse
 import messaging/response
-import store/actor as actor_store
+import store/store.{type Message as StoreMessage}
 
 pub fn response_handler(
   message: Message(a),
   state: Nil,
   connection: Connection(a),
-  store_actor: Subject(actor_store.Message),
+  store store_subject: Subject(StoreMessage),
+  configuration configuration_subject: Subject(ConfigurationMessage),
 ) -> Next(Message(a), Nil) {
   io.println("Received message!")
 
@@ -23,15 +25,17 @@ pub fn response_handler(
     |> parse.parse_bulk_message
 
   let response = case response {
-    option.None -> "UNKNOWN_COMMAND"
-    option.Some(command) -> response.handle_command(store_actor, command)
+    option.None -> "+UNKNOWN\r\n"
+    option.Some(command) ->
+      response.handle_command(store_subject, configuration_subject, command)
   }
 
   let assert Ok(_) =
     connection
     |> glisten.send(bytes_builder.from_string(response))
 
-  io.println("Responded with " <> response)
+  io.print("Responded with: ")
+  io.debug(response)
 
   actor.continue(state)
 }

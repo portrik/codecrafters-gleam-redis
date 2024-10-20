@@ -1,15 +1,71 @@
-import birl/duration
 import gleam/dict.{type Dict}
+import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option}
 import gleam/order
+import gleam/otp/actor
 
 import birl.{type Time}
+import birl/duration
+
+const timeout: Int = 5000
+
+pub type Message {
+  Get(client: Subject(Option(String)), key: String)
+  Set(key: String, value: String, expiration: Option(Int))
+
+  Shutdown
+}
 
 pub type Record {
   Record(value: String, created_at: Time, expires_at: Option(Time))
 }
 
-pub fn get_item(
+pub fn new() -> Result(Subject(Message), actor.StartError) {
+  actor.start(dict.new(), handle_message)
+}
+
+pub fn close(store_subject: Subject(Message)) -> Nil {
+  actor.send(store_subject, Shutdown)
+}
+
+pub fn get(store_subject: Subject(Message), key: String) -> Option(String) {
+  actor.call(store_subject, Get(_, key), timeout)
+}
+
+pub fn set(
+  store_subject: Subject(Message),
+  key: String,
+  value: String,
+  expiration: Option(Int),
+) -> Nil {
+  actor.send(store_subject, Set(key, value, expiration))
+}
+
+fn handle_message(
+  message: Message,
+  store: Dict(String, Record),
+) -> actor.Next(Message, Dict(String, Record)) {
+  case message {
+    Shutdown -> actor.Stop(process.Normal)
+
+    Get(client, key) -> {
+      let #(store, value) = get_item(store, key)
+      process.send(client, value)
+
+      actor.continue(store)
+    }
+
+    Set(key, value, expiration) -> {
+      let store =
+        store
+        |> set_item(key, value, expiration)
+
+      actor.continue(store)
+    }
+  }
+}
+
+fn get_item(
   store: Dict(String, Record),
   key: String,
 ) -> #(Dict(String, Record), Option(String)) {
@@ -28,7 +84,7 @@ pub fn get_item(
   }
 }
 
-pub fn set_item(
+fn set_item(
   store: Dict(String, Record),
   key: String,
   value: String,
