@@ -1,8 +1,9 @@
 import gleam/bit_array
 import gleam/int
 import gleam/list
-import gleam/option.{type Option}
+import gleam/option
 import gleam/regex
+import gleam/result
 import gleam/string
 
 import glisten.{type Message}
@@ -14,25 +15,27 @@ type RESP {
   RESP(length: Int, data: String)
 }
 
-fn bulk_regex_match_to_resp(match: regex.Match) -> Option(RESP) {
-  let assert regex.Match(
-    _content,
-    submatches: [option.Some(length), option.Some(data)],
-  ) = match
+fn bulk_regex_match_to_resp(match: regex.Match) -> Result(RESP, Nil) {
+  use #(length, data) <- result.try(case match {
+    regex.Match(_content, submatches: [option.Some(length), option.Some(data)]) ->
+      Ok(#(length, data))
+    _ -> Error(Nil)
+  })
 
-  let assert option.Some(length) =
+  use length <- result.try(
     length
-    |> int.base_parse(10)
-    |> option.from_result
+    |> int.base_parse(10),
+  )
 
-  option.Some(RESP(length: length, data: data))
+  Ok(RESP(length: length, data: data))
 }
 
-fn parse_resp(message: String) -> Option(List(RESP)) {
-  let assert option.Some(re) =
+fn parse_resp(message: String) -> Result(List(RESP), Nil) {
+  use re <- result.try(
     "\\$(?<length>\\d+)\r\n(?<data>.*?)\r\n"
     |> regex.from_string
-    |> option.from_result
+    |> result.nil_error,
+  )
 
   let matches =
     message
@@ -41,15 +44,18 @@ fn parse_resp(message: String) -> Option(List(RESP)) {
 
   let all_matches_are_some =
     matches
-    |> list.all(option.is_some)
+    |> list.all(result.is_ok)
 
   case all_matches_are_some {
-    False -> option.None
+    False -> Error(Nil)
     True ->
-      option.Some(
+      Ok(
         matches
-        |> list.map(fn(value) { option.unwrap(value, RESP(0, "UNKNOWN")) }),
-        // The fallback should not be reachable with the check above
+        |> list.map(fn(value) {
+          value
+          |> result.unwrap(RESP(0, "UNKNOWN"))
+          // The fallback should not be reachable with the all_matches_are_some check
+        }),
       )
   }
 }
@@ -82,26 +88,26 @@ fn parse_set_command(
   command.Set(key, value, expiration)
 }
 
-fn parse_config_get_command(key: String) -> Option(Command) {
+fn parse_config_get_command(key: String) -> Result(Command, Nil) {
   case string.lowercase(key) {
-    "dir" -> option.Some(command.Config(command.ConfigRead, configuration.Dir))
+    "dir" -> Ok(command.Config(command.ConfigRead, configuration.Dir))
     "dbfilename" ->
-      option.Some(command.Config(command.ConfigRead, configuration.DBFilename))
-    _ -> option.None
+      Ok(command.Config(command.ConfigRead, configuration.DBFilename))
+    _ -> Error(Nil)
   }
 }
 
-pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
-  let assert option.Some(message) = case message {
+pub fn parse_bulk_message(message: Message(a)) -> Result(Command, Nil) {
+  use message <- result.try(case message {
     glisten.Packet(content) ->
       content
       |> bit_array.to_string
-      |> option.from_result
-    _ -> option.None
-  }
+      |> result.nil_error
+    _ -> Error(Nil)
+  })
 
-  let assert option.Some(resp_list) = parse_resp(message)
-  // Commands should be case insensitive
+  use resp_list <- result.try(parse_resp(message))
+
   let resp_list =
     resp_list
     |> list.index_map(fn(value, index) {
@@ -113,14 +119,13 @@ pub fn parse_bulk_message(message: Message(a)) -> Option(Command) {
     })
 
   case resp_list {
-    [RESP(_length, "PING")] -> option.Some(command.Ping)
-    [RESP(_length, "ECHO"), RESP(_length, data)] ->
-      option.Some(command.Echo(data))
-    [RESP(_length, "GET"), RESP(_length, key)] -> option.Some(command.Get(key))
+    [RESP(_length, "PING")] -> Ok(command.Ping)
+    [RESP(_length, "ECHO"), RESP(_length, data)] -> Ok(command.Echo(data))
+    [RESP(_length, "GET"), RESP(_length, key)] -> Ok(command.Get(key))
     [RESP(_length, "SET"), RESP(_length, key), RESP(_length, value), ..options] ->
-      option.Some(parse_set_command(key, value, options))
+      Ok(parse_set_command(key, value, options))
     [RESP(_length, "CONFIG"), RESP(_length, "GET"), RESP(_length, key)] ->
       parse_config_get_command(key)
-    _ -> option.None
+    _ -> Error(Nil)
   }
 }

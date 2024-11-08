@@ -9,6 +9,11 @@ import birl/duration
 
 const timeout: Int = 5000
 
+type ValueError {
+  ValueExpired
+  ValueMissing
+}
+
 pub type Message {
   Get(client: Subject(Option(String)), key: String)
   Set(key: String, value: String, expiration: Option(Int))
@@ -69,18 +74,27 @@ fn get_item(
   store: Dict(String, Record),
   key: String,
 ) -> #(Dict(String, Record), Option(String)) {
-  let assert option.Some(value) =
+  let value =
     store
     |> dict.get(key)
     |> option.from_result
-
-  case value.expires_at {
-    option.None -> #(store, option.Some(value.value))
-    option.Some(expires_at) ->
-      case birl.compare(birl.now(), expires_at) {
-        order.Lt -> #(store, option.Some(value.value))
-        _ -> #(dict.delete(store, key), option.None)
+    |> option.map(fn(value) {
+      case value.expires_at {
+        option.None -> Ok(value.value)
+        option.Some(expires_at) -> {
+          case birl.compare(birl.now(), expires_at) {
+            order.Lt -> Ok(value.value)
+            _ -> Error(ValueExpired)
+          }
+        }
       }
+    })
+    |> option.unwrap(Error(ValueMissing))
+
+  case value {
+    Ok(value) -> #(store, option.Some(value))
+    Error(ValueMissing) -> #(store, option.None)
+    Error(ValueExpired) -> #(dict.delete(store, key), option.None)
   }
 }
 
