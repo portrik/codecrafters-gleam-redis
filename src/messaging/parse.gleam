@@ -1,3 +1,5 @@
+import birl
+import birl/duration
 import gleam/bit_array
 import gleam/int
 import gleam/list
@@ -78,7 +80,10 @@ fn parse_set_command(
         option.Some(_) -> {
           case int.base_parse(current.data, 10) {
             Error(_) -> option.None
-            Ok(value) -> option.Some(option.Some(value))
+            Ok(value) ->
+              option.Some(
+                option.Some(birl.add(birl.now(), duration.milli_seconds(value))),
+              )
           }
         }
       }
@@ -126,6 +131,7 @@ pub fn parse_bulk_message(message: Message(a)) -> Result(Command, Nil) {
       Ok(parse_set_command(key, value, options))
     [RESP(_length, "CONFIG"), RESP(_length, "GET"), RESP(_length, key)] ->
       parse_config_get_command(key)
+    [RESP(_length, "KEYS"), RESP(_length, pattern)] -> Ok(command.Keys(pattern))
     _ -> Error(Nil)
   }
 }

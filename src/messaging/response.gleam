@@ -33,6 +33,11 @@ pub fn handle_command(
 
       format.format_to_resp_array([key, value])
     }
+    command.Keys(pattern) -> {
+      store_subject
+      |> store.keys(pattern)
+      |> format.format_to_resp_array
+    }
   }
 
   case message {

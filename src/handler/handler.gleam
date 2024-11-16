@@ -1,7 +1,6 @@
 import gleam/bytes_builder
 import gleam/erlang/process.{type Subject}
 import gleam/io
-import gleam/option
 import gleam/otp/actor.{type Next}
 
 import glisten.{type Connection, type Message}
@@ -25,8 +24,8 @@ pub fn response_handler(
     |> parse.parse_bulk_message
 
   let response = case response {
-    option.None -> "+UNKNOWN\r\n"
-    option.Some(command) ->
+    Error(_) -> "+UNKNOWN\r\n"
+    Ok(command) ->
       response.handle_command(store_subject, configuration_subject, command)
   }
 

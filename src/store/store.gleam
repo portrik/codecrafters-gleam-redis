@@ -1,32 +1,32 @@
+import birl/duration
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
+import gleam/io
+import gleam/list
 import gleam/option.{type Option}
 import gleam/order
-import gleam/otp/actor
+import gleam/otp/actor.{type Next}
 
 import birl.{type Time}
-import birl/duration
 
 const timeout: Int = 5000
 
-type ValueError {
-  ValueExpired
-  ValueMissing
-}
-
 pub type Message {
   Get(client: Subject(Option(String)), key: String)
-  Set(key: String, value: String, expiration: Option(Int))
+  Set(key: String, value: String, expiration: Option(Time))
+  Keys(client: Subject(List(String)), pattern: String)
 
   Shutdown
 }
 
 pub type Record {
-  Record(value: String, created_at: Time, expires_at: Option(Time))
+  Record(value: String, expires_at: Option(Time))
 }
 
-pub fn new() -> Result(Subject(Message), actor.StartError) {
-  actor.start(dict.new(), handle_message)
+pub fn new(
+  initial_data: Option(Dict(String, Record)),
+) -> Result(Subject(Message), actor.StartError) {
+  actor.start(option.unwrap(initial_data, dict.new()), handle_message)
 }
 
 pub fn close(store_subject: Subject(Message)) -> Nil {
@@ -41,9 +41,77 @@ pub fn set(
   store_subject: Subject(Message),
   key: String,
   value: String,
-  expiration: Option(Int),
+  expiration: Option(Time),
 ) -> Nil {
   actor.send(store_subject, Set(key, value, expiration))
+}
+
+pub fn keys(store_subject: Subject(Message), pattern: String) -> List(String) {
+  actor.call(store_subject, Keys(_, pattern), timeout)
+}
+
+fn get_value_from_store(
+  store: Dict(String, Record),
+  key: String,
+) -> Option(String) {
+  use stored_value <- option.then(
+    store
+    |> dict.get(key)
+    |> option.from_result,
+  )
+
+  let expiration_time = case stored_value.expires_at {
+    option.None -> birl.add(birl.now(), duration.years(1))
+    option.Some(expiration) -> expiration
+  }
+
+  case birl.compare(birl.now(), expiration_time) == order.Lt {
+    True -> option.Some(stored_value.value)
+    False -> option.None
+  }
+}
+
+fn handle_get(
+  store: Dict(String, Record),
+  client: Subject(Option(String)),
+  key: String,
+) -> Next(Message, Dict(String, Record)) {
+  let value = get_value_from_store(store, key)
+  process.send(client, value)
+
+  actor.continue(store)
+}
+
+fn handle_set(
+  store: Dict(String, Record),
+  key: String,
+  value: String,
+  expiration: Option(Time),
+) -> Next(Message, Dict(String, Record)) {
+  actor.continue(
+    store
+    |> dict.insert(key, Record(value, expiration)),
+  )
+}
+
+fn handle_keys(
+  store: Dict(String, Record),
+  client: Subject(List(String)),
+  pattern: String,
+) -> Next(Message, Dict(String, Record)) {
+  let keys = case pattern {
+    "*" -> dict.keys(store)
+    pattern -> {
+      io.println("Pattern \"" <> pattern <> "\" is not supported")
+
+      list.new()
+    }
+  }
+
+  client
+  |> process.send(keys)
+
+  actor.continue(store)
 }
 
 fn handle_message(
@@ -53,68 +121,10 @@ fn handle_message(
   case message {
     Shutdown -> actor.Stop(process.Normal)
 
-    Get(client, key) -> {
-      let #(store, value) = get_item(store, key)
-      process.send(client, value)
+    Get(client, key) -> handle_get(store, client, key)
 
-      actor.continue(store)
-    }
+    Set(key, value, expiration) -> handle_set(store, key, value, expiration)
 
-    Set(key, value, expiration) -> {
-      let store =
-        store
-        |> set_item(key, value, expiration)
-
-      actor.continue(store)
-    }
+    Keys(client, pattern) -> handle_keys(store, client, pattern)
   }
-}
-
-fn get_item(
-  store: Dict(String, Record),
-  key: String,
-) -> #(Dict(String, Record), Option(String)) {
-  let value =
-    store
-    |> dict.get(key)
-    |> option.from_result
-    |> option.map(fn(value) {
-      case value.expires_at {
-        option.None -> Ok(value.value)
-        option.Some(expires_at) -> {
-          case birl.compare(birl.now(), expires_at) {
-            order.Lt -> Ok(value.value)
-            _ -> Error(ValueExpired)
-          }
-        }
-      }
-    })
-    |> option.unwrap(Error(ValueMissing))
-
-  case value {
-    Ok(value) -> #(store, option.Some(value))
-    Error(ValueMissing) -> #(store, option.None)
-    Error(ValueExpired) -> #(dict.delete(store, key), option.None)
-  }
-}
-
-fn set_item(
-  store: Dict(String, Record),
-  key: String,
-  value: String,
-  expiration: Option(Int),
-) -> Dict(String, Record) {
-  let created_at = birl.now()
-
-  let expires_at = case expiration {
-    option.None -> option.None
-    option.Some(value) ->
-      value
-      |> duration.milli_seconds
-      |> birl.add(created_at, _)
-      |> option.Some
-  }
-
-  store
-  |> dict.insert(key, Record(value, created_at, expires_at))
 }

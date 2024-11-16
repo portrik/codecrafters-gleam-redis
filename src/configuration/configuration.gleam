@@ -4,6 +4,7 @@ import gleam/option.{type Option}
 import gleam/otp/actor
 
 import argv
+import filepath
 
 const timeout: Int = 5000
 
@@ -35,6 +36,23 @@ pub fn get(
   key: ConfigurationKey,
 ) -> Option(String) {
   actor.call(configuration_subject, Get(_, key), timeout)
+}
+
+pub fn get_configuration_file_path(
+  configuration_subject: Subject(Message),
+) -> Option(String) {
+  use directory <- option.then(actor.call(
+    configuration_subject,
+    Get(_, Dir),
+    timeout,
+  ))
+  use filename <- option.then(actor.call(
+    configuration_subject,
+    Get(_, DBFilename),
+    timeout,
+  ))
+
+  option.Some(filepath.join(directory, filename))
 }
 
 fn handle_message(

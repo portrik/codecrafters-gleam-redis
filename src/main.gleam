@@ -1,14 +1,53 @@
+import gleam/dict.{type Dict}
 import gleam/erlang/process
-import gleam/option.{None}
+import gleam/io
+import gleam/option.{type Option, None}
 import glisten.{type Connection, type Message}
 import handler/handler
 
 import configuration/configuration
+import store/file
 import store/store
 
+fn load_database_file(
+  database_file: String,
+) -> Option(Dict(String, store.Record)) {
+  let database_data = file.load_database_file(database_file)
+
+  case database_data {
+    Ok(database_data) -> option.Some(database_data)
+    Error(error) -> {
+      io.println("Could not load database file due to an error")
+      case error {
+        file.DatabaseFileCannotBeFound ->
+          io.println("File " <> database_file <> " could not be found")
+        file.DatabaseFileInvalidMagicString ->
+          io.println(
+            "File " <> database_file <> " has invalid magic string header.",
+          )
+        file.DatabaseFileInvalidMetadata ->
+          io.println("File " <> database_file <> " has invalid metadata.")
+        file.DatabaseFileInvalidData ->
+          io.println("File " <> database_file <> " has invalid data structure.")
+        file.DatabaseFileChecksumError ->
+          io.println("File " <> database_file <> " has incorrect checksum.")
+      }
+
+      option.None
+    }
+  }
+}
+
 pub fn main() {
-  let assert Ok(store_subject) = store.new()
   let assert Ok(configuration_subject) = configuration.new()
+  let database_file =
+    configuration.get_configuration_file_path(configuration_subject)
+  let database_data = case database_file {
+    option.Some(database_file) -> load_database_file(database_file)
+    option.None -> option.None
+  }
+
+  let assert Ok(store_subject) = store.new(database_data)
 
   let assert Ok(_) =
     glisten.handler(
