@@ -62,7 +62,10 @@ pub fn main() {
         )
       },
     )
-    |> glisten.serve(6379)
+    |> glisten.serve(configuration.get_integer(
+      configuration_subject,
+      configuration.Port,
+    ))
 
   process.sleep_forever()
 

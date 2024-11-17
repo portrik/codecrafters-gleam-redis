@@ -2,7 +2,7 @@ import gleam/int
 import gleam/list
 import gleam/string
 
-import configuration/configuration.{type ConfigurationKey}
+import configuration/configuration.{type ConfigurationKeyString}
 
 pub fn format_to_resp_string(input: String) -> String {
   let length =
@@ -27,7 +27,7 @@ pub fn format_to_resp_array(input: List(String)) -> String {
   "*" <> length <> "\r\n" <> content
 }
 
-pub fn configuration_key_to_string(key: ConfigurationKey) -> String {
+pub fn configuration_key_to_string(key: ConfigurationKeyString) -> String {
   case key {
     configuration.Dir -> "dir"
     configuration.DBFilename -> "dbfilename"

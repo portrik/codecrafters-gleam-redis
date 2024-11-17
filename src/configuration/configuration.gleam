@@ -1,24 +1,37 @@
 import gleam/erlang/process.{type Subject}
+import gleam/int
 import gleam/list
 import gleam/option.{type Option}
 import gleam/otp/actor
+import gleam/result
 
 import argv
 import filepath
 
 const timeout: Int = 5000
 
+const default_port: Int = 6379
+
 pub type Configuration {
-  Configuration(directory: Option(String), database_filename: Option(String))
+  Configuration(
+    directory: Option(String),
+    database_filename: Option(String),
+    port: Int,
+  )
 }
 
-pub type ConfigurationKey {
+pub type ConfigurationKeyString {
   Dir
   DBFilename
 }
 
+pub type ConfigurationKeyInteger {
+  Port
+}
+
 pub type Message {
-  Get(client: Subject(Option(String)), key: ConfigurationKey)
+  GetStringValue(client: Subject(Option(String)), key: ConfigurationKeyString)
+  GetIntegerValue(client: Subject(Int), key: ConfigurationKeyInteger)
 
   Shutdown
 }
@@ -31,11 +44,18 @@ pub fn close(actor_subject: Subject(Message)) -> Nil {
   actor.send(actor_subject, Shutdown)
 }
 
-pub fn get(
+pub fn get_string(
   configuration_subject: Subject(Message),
-  key: ConfigurationKey,
+  key: ConfigurationKeyString,
 ) -> Option(String) {
-  actor.call(configuration_subject, Get(_, key), timeout)
+  actor.call(configuration_subject, GetStringValue(_, key), timeout)
+}
+
+pub fn get_integer(
+  configuration_subject: Subject(Message),
+  key: ConfigurationKeyInteger,
+) -> Int {
+  actor.call(configuration_subject, GetIntegerValue(_, key), timeout)
 }
 
 pub fn get_configuration_file_path(
@@ -43,12 +63,12 @@ pub fn get_configuration_file_path(
 ) -> Option(String) {
   use directory <- option.then(actor.call(
     configuration_subject,
-    Get(_, Dir),
+    GetStringValue(_, Dir),
     timeout,
   ))
   use filename <- option.then(actor.call(
     configuration_subject,
-    Get(_, DBFilename),
+    GetStringValue(_, DBFilename),
     timeout,
   ))
 
@@ -62,10 +82,20 @@ fn handle_message(
   case message {
     Shutdown -> actor.Stop(process.Normal)
 
-    Get(client, key) -> {
+    GetStringValue(client, key) -> {
       let value = case key {
         Dir -> configuration.directory
         DBFilename -> configuration.database_filename
+      }
+
+      process.send(client, value)
+
+      actor.continue(configuration)
+    }
+
+    GetIntegerValue(client, key) -> {
+      let value = case key {
+        Port -> configuration.port
       }
 
       process.send(client, value)
@@ -79,7 +109,11 @@ fn load_command_line() -> Configuration {
   argv.load().arguments
   |> list.sized_chunk(2)
   |> list.fold(
-    Configuration(directory: option.None, database_filename: option.None),
+    Configuration(
+      directory: option.None,
+      database_filename: option.None,
+      port: default_port,
+    ),
     fold_configration_argument,
   )
 }
@@ -95,6 +129,13 @@ fn fold_configration_argument(
       Configuration(
         ..current_configuration,
         database_filename: option.Some(value),
+      )
+    ["--port", value] ->
+      Configuration(
+        ..current_configuration,
+        port: value
+          |> int.parse
+          |> result.unwrap(default_port),
       )
     _ -> current_configuration
   }

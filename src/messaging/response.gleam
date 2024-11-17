@@ -26,7 +26,7 @@ pub fn handle_command(
     command.Config(command.ConfigRead, key) -> {
       let value =
         key
-        |> configuration.get(configuration_subject, _)
+        |> configuration.get_string(configuration_subject, _)
         |> option.unwrap("-1")
 
       let key = format.configuration_key_to_string(key)
