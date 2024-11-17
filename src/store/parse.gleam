@@ -1,6 +1,8 @@
 import gleam/bit_array
 import gleam/int
+import gleam/list
 import gleam/result
+import gleam/string
 
 import birl.{type Time}
 import file_streams/file_stream.{type FileStream}
@@ -10,7 +12,18 @@ pub type ExpirationType {
   Milliseconds
 }
 
-fn parse_integer(array: BitArray) -> Result(Int, Nil) {
+fn parse_integer_big_endian(array: BitArray) -> Result(Int, Nil) {
+  array
+  |> bit_array.base16_encode
+  |> string.to_graphemes
+  |> list.sized_chunk(2)
+  |> list.reverse
+  |> list.map(string.concat)
+  |> string.concat
+  |> int.base_parse(16)
+}
+
+fn parse_integer_little_endian(array: BitArray) -> Result(Int, Nil) {
   array
   |> bit_array.base16_encode
   |> int.base_parse(16)
@@ -29,7 +42,7 @@ fn parse_value(stream: FileStream, size: BitArray) -> Result(String, Nil) {
       use value <- result.try(
         stream
         |> file_stream.read_bytes_exact(size)
-        |> result.map(parse_integer)
+        |> result.map(parse_integer_little_endian)
         |> result.nil_error
         |> result.flatten,
       )
@@ -83,7 +96,7 @@ pub fn parse_expiration(
       use seconds <- result.try(
         stream
         |> file_stream.read_bytes_exact(4)
-        |> result.map(parse_integer)
+        |> result.map(parse_integer_big_endian)
         |> result.nil_error
         |> result.flatten,
       )
@@ -94,7 +107,7 @@ pub fn parse_expiration(
       use milliseconds <- result.try(
         stream
         |> file_stream.read_bytes_exact(8)
-        |> result.map(parse_integer)
+        |> result.map(parse_integer_big_endian)
         |> result.nil_error
         |> result.flatten,
       )
