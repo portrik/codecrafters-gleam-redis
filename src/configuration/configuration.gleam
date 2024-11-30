@@ -5,6 +5,7 @@ import gleam/option.{type Option}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
+import ids/ulid
 
 import argv
 import filepath
@@ -23,7 +24,7 @@ pub opaque type Configuration {
 }
 
 pub type Replication {
-  MasterReplication
+  MasterReplication(id: String, offset: Int)
   SlaveReplication(master_host: String, master_port: Int)
 }
 
@@ -131,13 +132,13 @@ fn load_command_line() -> Configuration {
       directory: option.None,
       database_filename: option.None,
       port: default_port,
-      replication: MasterReplication,
+      replication: MasterReplication(ulid.generate(), 0),
     ),
     fold_configuration_argument,
   )
 }
 
-fn parse_replication(arguments: String) -> Replication {
+fn parse_replication(current: Replication, arguments: String) -> Replication {
   let arguments = string.split(arguments, " ")
 
   let values = case arguments {
@@ -154,7 +155,7 @@ fn parse_replication(arguments: String) -> Replication {
 
   case values {
     option.Some(#(hostname, port)) -> SlaveReplication(hostname, port)
-    option.None -> MasterReplication
+    option.None -> current
   }
 }
 
@@ -180,7 +181,10 @@ fn fold_configuration_argument(
     ["--replicaof", arguments] ->
       Configuration(
         ..current_configuration,
-        replication: parse_replication(arguments),
+        replication: parse_replication(
+          current_configuration.replication,
+          arguments,
+        ),
       )
     _ -> current_configuration
   }

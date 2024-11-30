@@ -14,6 +14,7 @@ argv = ">= 1.0.2 and < 2.0.0"
 file_streams = ">= 1.1.1 and < 2.0.0"
 filepath = ">= 1.0.0 and < 2.0.0"
 gleam_regexp = ">= 1.0.0 and < 2.0.0"
+ids = ">= 0.13.0 and < 1.0.0"
 
 [dev-dependencies]
 gleeunit = "~> 1.0"

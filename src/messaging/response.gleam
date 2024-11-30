@@ -46,7 +46,11 @@ pub fn handle_command(
         command.Replication -> {
           let replication = configuration.get_replication(configuration_subject)
           let values = case replication {
-            configuration.MasterReplication -> [#("role", "master")]
+            configuration.MasterReplication(id, offset) -> [
+              #("role", "master"),
+              #("master_replid", id),
+              #("master_repl_offset", int.to_string(offset)),
+            ]
             configuration.SlaveReplication(master_hostname, master_port) -> [
               #("role", "slave"),
               #("master_hostname", master_hostname),
