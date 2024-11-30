@@ -4,6 +4,7 @@ import gleam/list
 import gleam/option.{type Option}
 import gleam/otp/actor
 import gleam/result
+import gleam/string
 
 import argv
 import filepath
@@ -12,22 +13,23 @@ const timeout: Int = 5000
 
 const default_port: Int = 6379
 
-pub type Configuration {
+pub opaque type Configuration {
   Configuration(
     directory: Option(String),
     database_filename: Option(String),
     port: Int,
-    replication: List(#(String, String)),
+    replication: Replication,
   )
+}
+
+pub type Replication {
+  MasterReplication
+  SlaveReplication(master_host: String, master_port: Int)
 }
 
 pub type ConfigurationKeyString {
   Dir
   DBFilename
-}
-
-pub type ConfigurationKeyStringTupleList {
-  Replication
 }
 
 pub type ConfigurationKeyInteger {
@@ -37,10 +39,7 @@ pub type ConfigurationKeyInteger {
 pub type Message {
   GetStringValue(client: Subject(Option(String)), key: ConfigurationKeyString)
   GetIntegerValue(client: Subject(Int), key: ConfigurationKeyInteger)
-  GetStringTupleListValue(
-    client: Subject(List(#(String, String))),
-    key: ConfigurationKeyStringTupleList,
-  )
+  GetReplication(client: Subject(Replication))
 
   Shutdown
 }
@@ -67,11 +66,8 @@ pub fn get_integer(
   actor.call(configuration_subject, GetIntegerValue(_, key), timeout)
 }
 
-pub fn get_string_tuple_list(
-  configuration_subject: Subject(Message),
-  key: ConfigurationKeyStringTupleList,
-) -> List(#(String, String)) {
-  actor.call(configuration_subject, GetStringTupleListValue(_, key), timeout)
+pub fn get_replication(configuration_subject: Subject(Message)) -> Replication {
+  actor.call(configuration_subject, GetReplication, timeout)
 }
 
 pub fn get_configuration_file_path(
@@ -119,12 +115,8 @@ fn handle_message(
       actor.continue(configuration)
     }
 
-    GetStringTupleListValue(client, key) -> {
-      let value = case key {
-        Replication -> configuration.replication
-      }
-
-      process.send(client, value)
+    GetReplication(client) -> {
+      process.send(client, configuration.replication)
 
       actor.continue(configuration)
     }
@@ -139,15 +131,31 @@ fn load_command_line() -> Configuration {
       directory: option.None,
       database_filename: option.None,
       port: default_port,
-      replication: [
-        #("role", "master"),
-        #("connected_slaves", "0"),
-        #("master_replid", "f1c419b3-9be7-451e-9368-e9d81fdbc591"),
-        #("master_repl_offset", "0"),
-      ],
+      replication: MasterReplication,
     ),
     fold_configuration_argument,
   )
+}
+
+fn parse_replication(arguments: String) -> Replication {
+  let arguments = string.split(arguments, " ")
+
+  let values = case arguments {
+    [hostname, port] -> {
+      let port = int.parse(port)
+
+      case port {
+        Ok(port) -> option.Some(#(hostname, port))
+        Error(_) -> option.None
+      }
+    }
+    _ -> option.None
+  }
+
+  case values {
+    option.Some(#(hostname, port)) -> SlaveReplication(hostname, port)
+    option.None -> MasterReplication
+  }
 }
 
 fn fold_configuration_argument(
@@ -168,6 +176,11 @@ fn fold_configuration_argument(
         port: value
           |> int.parse
           |> result.unwrap(default_port),
+      )
+    ["--replicaof", arguments] ->
+      Configuration(
+        ..current_configuration,
+        replication: parse_replication(arguments),
       )
     _ -> current_configuration
   }

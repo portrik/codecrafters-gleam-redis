@@ -1,7 +1,8 @@
-import gleam/string
 import gleam/erlang/process.{type Subject}
+import gleam/int
 import gleam/list
 import gleam/option
+import gleam/string
 
 import configuration/configuration.{type Message as ConfigurationMessage}
 import messaging/command.{type Command}
@@ -41,11 +42,24 @@ pub fn handle_command(
       |> format.format_to_resp_array
     }
     command.Info(key) -> {
-      key
-      |> configuration.get_string_tuple_list(configuration_subject, _)
-      |> list.map(fn(value) { "" <> value.0 <> ":" <> value.1 <> "" })
-      |> string.join("\n")
-      |> format.format_to_resp_string
+      case key {
+        command.Replication -> {
+          let replication = configuration.get_replication(configuration_subject)
+          let values = case replication {
+            configuration.MasterReplication -> [#("role", "master")]
+            configuration.SlaveReplication(master_hostname, master_port) -> [
+              #("role", "slave"),
+              #("master_hostname", master_hostname),
+              #("master_port", int.to_string(master_port)),
+            ]
+          }
+
+          values
+          |> list.map(fn(values) { "" <> values.0 <> ":" <> values.1 })
+          |> string.join("\n")
+          |> format.format_to_resp_string
+        }
+      }
     }
   }
 

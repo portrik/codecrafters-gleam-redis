@@ -104,7 +104,7 @@ fn parse_config_get_command(key: String) -> Result(Command, Nil) {
 
 fn parse_info_command(value: String) -> Result(Command, Nil) {
   case string.lowercase(value) {
-    "replication" -> Ok(command.Info(configuration.Replication))
+    "replication" -> Ok(command.Info(command.Replication))
     _ -> Error(Nil)
   }
 }
