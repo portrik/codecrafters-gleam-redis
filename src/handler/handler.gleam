@@ -1,4 +1,4 @@
-import gleam/bytes_builder
+import gleam/bytes_tree
 import gleam/erlang/process.{type Subject}
 import gleam/io
 import gleam/otp/actor.{type Next}
@@ -31,7 +31,7 @@ pub fn response_handler(
 
   let assert Ok(_) =
     connection
-    |> glisten.send(bytes_builder.from_string(response))
+    |> glisten.send(bytes_tree.from_string(response))
 
   io.print("Responded with: ")
   io.debug(response)

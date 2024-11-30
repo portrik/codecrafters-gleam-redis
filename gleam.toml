@@ -8,11 +8,12 @@ version = "1.0.0"
 gleam_stdlib = "~> 0.34 or ~> 1.0"
 gleam_erlang = "~> 0.25"
 gleam_otp = "~> 0.10"
-glisten = "~> 2.0"
+glisten = "~> 6.0"
 birl = ">= 1.6.1 and < 2.0.0"
 argv = ">= 1.0.2 and < 2.0.0"
 file_streams = ">= 1.1.1 and < 2.0.0"
 filepath = ">= 1.0.0 and < 2.0.0"
+gleam_regexp = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = "~> 1.0"

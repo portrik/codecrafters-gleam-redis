@@ -17,12 +17,17 @@ pub type Configuration {
     directory: Option(String),
     database_filename: Option(String),
     port: Int,
+    replication: List(#(String, String)),
   )
 }
 
 pub type ConfigurationKeyString {
   Dir
   DBFilename
+}
+
+pub type ConfigurationKeyStringTupleList {
+  Replication
 }
 
 pub type ConfigurationKeyInteger {
@@ -32,6 +37,10 @@ pub type ConfigurationKeyInteger {
 pub type Message {
   GetStringValue(client: Subject(Option(String)), key: ConfigurationKeyString)
   GetIntegerValue(client: Subject(Int), key: ConfigurationKeyInteger)
+  GetStringTupleListValue(
+    client: Subject(List(#(String, String))),
+    key: ConfigurationKeyStringTupleList,
+  )
 
   Shutdown
 }
@@ -56,6 +65,13 @@ pub fn get_integer(
   key: ConfigurationKeyInteger,
 ) -> Int {
   actor.call(configuration_subject, GetIntegerValue(_, key), timeout)
+}
+
+pub fn get_string_tuple_list(
+  configuration_subject: Subject(Message),
+  key: ConfigurationKeyStringTupleList,
+) -> List(#(String, String)) {
+  actor.call(configuration_subject, GetStringTupleListValue(_, key), timeout)
 }
 
 pub fn get_configuration_file_path(
@@ -102,6 +118,16 @@ fn handle_message(
 
       actor.continue(configuration)
     }
+
+    GetStringTupleListValue(client, key) -> {
+      let value = case key {
+        Replication -> configuration.replication
+      }
+
+      process.send(client, value)
+
+      actor.continue(configuration)
+    }
   }
 }
 
@@ -113,12 +139,18 @@ fn load_command_line() -> Configuration {
       directory: option.None,
       database_filename: option.None,
       port: default_port,
+      replication: [
+        #("role", "master"),
+        #("connected_slaves", "0"),
+        #("master_replid", "f1c419b3-9be7-451e-9368-e9d81fdbc591"),
+        #("master_repl_offset", "0"),
+      ],
     ),
-    fold_configration_argument,
+    fold_configuration_argument,
   )
 }
 
-fn fold_configration_argument(
+fn fold_configuration_argument(
   current_configuration: Configuration,
   argument: List(String),
 ) -> Configuration {

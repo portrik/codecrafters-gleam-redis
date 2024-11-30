@@ -4,7 +4,7 @@ import gleam/bit_array
 import gleam/int
 import gleam/list
 import gleam/option
-import gleam/regex
+import gleam/regexp
 import gleam/result
 import gleam/string
 
@@ -17,9 +17,9 @@ type RESP {
   RESP(length: Int, data: String)
 }
 
-fn bulk_regex_match_to_resp(match: regex.Match) -> Result(RESP, Nil) {
+fn bulk_regex_match_to_resp(match: regexp.Match) -> Result(RESP, Nil) {
   use #(length, data) <- result.try(case match {
-    regex.Match(_content, submatches: [option.Some(length), option.Some(data)]) ->
+    regexp.Match(_content, submatches: [option.Some(length), option.Some(data)]) ->
       Ok(#(length, data))
     _ -> Error(Nil)
   })
@@ -35,13 +35,13 @@ fn bulk_regex_match_to_resp(match: regex.Match) -> Result(RESP, Nil) {
 fn parse_resp(message: String) -> Result(List(RESP), Nil) {
   use re <- result.try(
     "\\$(?<length>\\d+)\r\n(?<data>.*?)\r\n"
-    |> regex.from_string
-    |> result.nil_error,
+    |> regexp.from_string
+    |> result.replace_error(Nil),
   )
 
   let matches =
     message
-    |> regex.scan(with: re, content: _)
+    |> regexp.scan(with: re, content: _)
     |> list.map(bulk_regex_match_to_resp)
 
   let all_matches_are_some =
@@ -102,12 +102,19 @@ fn parse_config_get_command(key: String) -> Result(Command, Nil) {
   }
 }
 
+fn parse_info_command(value: String) -> Result(Command, Nil) {
+  case string.lowercase(value) {
+    "replication" -> Ok(command.Info(configuration.Replication))
+    _ -> Error(Nil)
+  }
+}
+
 pub fn parse_bulk_message(message: Message(a)) -> Result(Command, Nil) {
   use message <- result.try(case message {
     glisten.Packet(content) ->
       content
       |> bit_array.to_string
-      |> result.nil_error
+      |> result.replace_error(Nil)
     _ -> Error(Nil)
   })
 
@@ -132,6 +139,7 @@ pub fn parse_bulk_message(message: Message(a)) -> Result(Command, Nil) {
     [RESP(_length, "CONFIG"), RESP(_length, "GET"), RESP(_length, key)] ->
       parse_config_get_command(key)
     [RESP(_length, "KEYS"), RESP(_length, pattern)] -> Ok(command.Keys(pattern))
+    [RESP(_length, "INFO"), RESP(_length, value)] -> parse_info_command(value)
     _ -> Error(Nil)
   }
 }

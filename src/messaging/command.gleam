@@ -1,7 +1,9 @@
 import gleam/option.{type Option}
 
 import birl.{type Time}
-import configuration/configuration.{type ConfigurationKeyString}
+import configuration/configuration.{
+  type ConfigurationKeyString, type ConfigurationKeyStringTupleList,
+}
 
 pub type ConfigAction {
   ConfigRead
@@ -15,4 +17,5 @@ pub type Command {
   Keys(pattern: String)
 
   Config(action: ConfigAction, key: ConfigurationKeyString)
+  Info(value: ConfigurationKeyStringTupleList)
 }

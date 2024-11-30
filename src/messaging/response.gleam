@@ -1,4 +1,6 @@
+import gleam/string
 import gleam/erlang/process.{type Subject}
+import gleam/list
 import gleam/option
 
 import configuration/configuration.{type Message as ConfigurationMessage}
@@ -37,6 +39,13 @@ pub fn handle_command(
       store_subject
       |> store.keys(pattern)
       |> format.format_to_resp_array
+    }
+    command.Info(key) -> {
+      key
+      |> configuration.get_string_tuple_list(configuration_subject, _)
+      |> list.map(fn(value) { "" <> value.0 <> ":" <> value.1 <> "" })
+      |> string.join("\n")
+      |> format.format_to_resp_string
     }
   }
 

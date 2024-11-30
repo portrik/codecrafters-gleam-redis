@@ -43,7 +43,7 @@ fn parse_value(stream: FileStream, size: BitArray) -> Result(String, Nil) {
         stream
         |> file_stream.read_bytes_exact(size)
         |> result.map(parse_integer_little_endian)
-        |> result.nil_error
+        |> result.replace_error(Nil)
         |> result.flatten,
       )
 
@@ -61,7 +61,7 @@ fn parse_value(stream: FileStream, size: BitArray) -> Result(String, Nil) {
         stream
         |> file_stream.read_bytes_exact(size)
         |> result.map(fn(value) { bit_array.to_string(value) })
-        |> result.nil_error
+        |> result.replace_error(Nil)
         |> result.flatten,
       )
 
@@ -79,7 +79,7 @@ pub fn parse_key_value_pair(
   use value_size <- result.try(
     stream
     |> file_stream.read_bytes_exact(1)
-    |> result.nil_error,
+    |> result.replace_error(Nil),
   )
 
   use value <- result.try(parse_value(stream, value_size))
@@ -97,7 +97,7 @@ pub fn parse_expiration(
         stream
         |> file_stream.read_bytes_exact(4)
         |> result.map(parse_integer_big_endian)
-        |> result.nil_error
+        |> result.replace_error(Nil)
         |> result.flatten,
       )
 
@@ -108,7 +108,7 @@ pub fn parse_expiration(
         stream
         |> file_stream.read_bytes_exact(8)
         |> result.map(parse_integer_big_endian)
-        |> result.nil_error
+        |> result.replace_error(Nil)
         |> result.flatten,
       )
 
