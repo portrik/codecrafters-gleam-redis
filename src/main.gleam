@@ -4,6 +4,7 @@ import gleam/io
 import gleam/option.{type Option, None}
 import glisten.{type Connection, type Message}
 import handler/handler
+import replication/replication
 
 import configuration/configuration
 import store/file
@@ -45,6 +46,13 @@ pub fn main() {
   let database_data = case database_file {
     option.Some(database_file) -> load_database_file(database_file)
     option.None -> option.None
+  }
+
+  let replication = configuration.get_replication(configuration_subject)
+  let _replication = case replication {
+    configuration.SlaveReplication(hostname, port) ->
+      replication.connect_to_master(hostname, port)
+    _ -> Ok(Nil)
   }
 
   let assert Ok(store_subject) = store.new(database_data)
