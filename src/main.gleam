@@ -49,9 +49,11 @@ pub fn main() {
   }
 
   let replication = configuration.get_replication(configuration_subject)
+  let listening_port =
+    configuration.get_integer(configuration_subject, configuration.Port)
   let _replication = case replication {
     configuration.SlaveReplication(hostname, port) ->
-      replication.connect_to_master(hostname, port)
+      replication.connect_to_master(hostname, port, listening_port)
     _ -> Ok(Nil)
   }
 
