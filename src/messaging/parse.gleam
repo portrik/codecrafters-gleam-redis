@@ -140,6 +140,7 @@ pub fn parse_bulk_message(message: Message(a)) -> Result(Command, Nil) {
       parse_config_get_command(key)
     [RESP(_length, "KEYS"), RESP(_length, pattern)] -> Ok(command.Keys(pattern))
     [RESP(_length, "INFO"), RESP(_length, value)] -> parse_info_command(value)
+    [RESP(_length, "REPLCONF"), _, _] -> Ok(command.Echo("OK"))
     _ -> Error(Nil)
   }
 }

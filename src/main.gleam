@@ -4,7 +4,7 @@ import gleam/io
 import gleam/option.{type Option, None}
 import glisten.{type Connection, type Message}
 import handler/handler
-import replication/replication
+import replication/slave
 
 import configuration/configuration
 import store/file
@@ -53,7 +53,7 @@ pub fn main() {
     configuration.get_integer(configuration_subject, configuration.Port)
   let _replication = case replication {
     configuration.SlaveReplication(hostname, port) ->
-      replication.connect_to_master(hostname, port, listening_port)
+      slave.connect_to_master(hostname, port, listening_port)
     _ -> Ok(Nil)
   }
 
