@@ -12,6 +12,7 @@ pub type MasterConnectionError {
   UnableToConnect
   PingFailed
   ConfirmationFailed
+  SynchronizationFailed
 }
 
 type MasterSocket(state) {
@@ -101,10 +102,26 @@ fn send_confirmation(
 }
 
 fn send_synchronization(
-  _socket: MasterSocket(MasterSocketSynchronize),
+  socket: MasterSocket(MasterSocketSynchronize),
 ) -> Result(Nil, MasterConnectionError) {
+  let synchronization_message =
+    ["PSYNC", "?", "-1"]
+    |> format.format_to_resp_array
+    |> bit_array.from_string
+
+  use _nil_result <- result.try(
+    socket.socket
+    |> mug.send(synchronization_message)
+    |> result.replace_error(SynchronizationFailed),
+  )
+
+  use _response <- result.try(
+    socket.socket
+    |> mug.receive(timeout)
+    |> result.replace_error(SynchronizationFailed),
+  )
+
   Ok(Nil)
-  // TODO
 }
 
 pub fn connect_to_master(
